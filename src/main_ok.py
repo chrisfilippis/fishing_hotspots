@@ -38,6 +38,16 @@ def get_spark_session():
         .getOrCreate()
 
 
+def get_spark_config():
+    return SparkConf()\
+        .setAppName(app_name)
+
+
+def get_spark_context():
+    session = get_spark_session()
+    return session.sparkContext
+
+
 def get_weight(point):
     return distance.euclidean((0, 0, 0), point)
 
@@ -137,28 +147,8 @@ def create_html_from_csv(path_to_dir):
         latitudes.append(get_decimal(row['id'].split('_')[1], step_lat))
         longitudes.append(get_decimal(row['id'].split('_')[0], step_lon))
 
-    create_heatmap_from_points(latitudes, longitudes, new_path + '\heatmap.html')
+    create_heatmap_from_points(latitudes, longitudes, new_path + 'heatmap.html')
 
-
-def load_rdd(csv_path, fishing_vessels_csv_path):
-    fishing_vessels = sc.textFile(fishing_vessels_csv_path).filter(lambda l: not l.startswith('maritime_area'))
-
-    fishing_vessels_source = fishing_vessels\
-        .map(lambda x: x.split(";")[5])\
-        .filter(lambda x: x != '')
-
-    initData = sc.textFile(csv_path).filter(lambda l: not l.startswith('sourcemmsi'))
-
-    initSource = initData\
-        .map(lambda x: x.split(","))
-
-    init_source_join = initSource \
-        .map(lambda x: (int(x[0]), (int(x[8]), float(x[6]), float(x[7]))))
-
-    fishing_vessels_source_join = fishing_vessels_source.map(lambda x: (int(x), 'fish'))
-    joined = init_source_join.leftOuterJoin(fishing_vessels_source_join)    
-    filtered_join = joined.filter(lambda x: not x[1][1] is None)
-    return filtered_join.map(lambda x: (int(x[1][0][0]), float(x[1][0][1]), float(x[1][0][2]), int(x[0])))
 
 # places   degrees          distance
 # -------  -------          --------
@@ -172,20 +162,17 @@ def load_rdd(csv_path, fishing_vessels_csv_path):
 # 7        0.0000001        1.11 cm
 # 8        0.00000001       1.11 mm
 
-sparkSession = get_spark_session()
-sc = sparkSession.sparkContext
-sqlContext = sparkSession
-step_lat = 0.003
-step_lon = 0.003
+
+
+sc = get_spark_context()
+sqlContext = SQLContext(sc)
+step_lat = 0.005
+step_lon = 0.005
 step_time = 120
 top_k = 15000
 count_data = 0
-result_path = 'file:///C:/Users/filippisc/Desktop/Spark_Data/results'
-csv_file_path = 'file:///C:/Users/filippisc/Desktop/project/data/nari_dynamic.csv'
-fishing_vessels_csv_file_path = 'file:///C:/Users/filippisc/Desktop/project/data/anfr.csv'
-
-# result_path = 'file:///spark/spark-2.2.1-bin-hadoop2.7/results'
-# csv_file_path = 'hdfs:///data/test/data_full.csv'
+result_path = 'file:///spark/spark-2.2.1-bin-hadoop2.7/results'
+csv_file_path = 'hdfs:///data/test/data_full.csv'
 # csv_file_path = "C:\Spark_Data\million_bigdata.sample"
 
 acc_number_of_cells = sc.accumulator(0)
@@ -193,9 +180,14 @@ acc_sum_x = sc.accumulator(0)
 acc_sum_x2 = sc.accumulator(0)
 count_data = sc.accumulator(0)
 
-#=62% (935932/1500000)
+initData = sc.textFile(csv_file_path).filter(lambda l: not l.startswith('sourcemmsi'))
+
+initSource = initData\
+    .map(lambda x: x.split(","))
+
 # int: time, float: lat, float: lon, int: id
-source = load_rdd(csv_file_path, fishing_vessels_csv_file_path)
+source = initSource \
+    .map(lambda x: (int(x[8]), float(x[6]), float(x[7]), int(x[0])))
 
 # find the min date
 broad_time_min = source\
@@ -237,9 +229,9 @@ keyValue_weighted_data = structured_weighted_data \
 keyValue_weighted_data.foreach(lambda x: handle_accumulators(x, acc_sum_x, acc_sum_x2))
 
 # find the number of cells using accumulator number_of_cells
-source.foreach(lambda x: acc_number_of_cells.add(1))
+initSource.foreach(lambda x: acc_number_of_cells.add(1))
 
-source.foreach(lambda x: count_data.add(1))
+initSource.foreach(lambda x: count_data.add(1))
 
 # get values
 number_of_cells = acc_number_of_cells.value
@@ -260,8 +252,22 @@ keyValue_with_neighbor_weights = keyValue_weighted_data\
 getis_ord_keyValue = keyValue_with_neighbor_weights\
     .map(lambda line: get_getisord(line[0], line[1], n, X, S, time_min, time_max, lon_min, lon_max, lat_min, lat_max))
 
+
+weight_dataFrame = sqlContext.createDataFrame(keyValue_with_neighbor_weights, ['id', 'sumxi'])
 getis_dataFrame = sqlContext.createDataFrame(getis_ord_keyValue, ['id', 'gi'])
 
-getis_dataFrame.sort(['gi'], ascending=[0]).limit(int(count_data.value * 0.03)).repartition(1).write.format("com.databricks.spark.csv").option("header", "true").save(result_path)
-create_html_from_csv(result_path)
-sparkSession.stop()
+# print '########################'
+# print '#### number_of_cells  = ' + str(number_of_cells)
+# print '#### sum_x            = ' + str(sum_x)
+# print '#### sum_x2           = ' + str(sum_x2)
+# print '#### X                = ' + str(X)
+# print '#### S                = ' + str(S)
+# print '#### n                = ' + str(n)
+# print '#### lon range        = ' + str(lon_min) + " / " + str(lon_max)
+# print '#### lat range        = ' + str(lat_min) + " / " + str(lat_max)
+# print '#### time range       = ' + str(time_min) + " / " + str(time_max)
+# print '#### count_data       = ' + str(count_data.value)
+# print '########################'
+
+getis_dataFrame.sort(['gi'], ascending=[0]).limit(int(count_data.value * 0.30)).repartition(1).write.format("com.databricks.spark.csv").option("header", "true").save(result_path)
+#create_html_from_csv(result_path)

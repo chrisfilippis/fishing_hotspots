@@ -140,26 +140,6 @@ def create_html_from_csv(path_to_dir):
     create_heatmap_from_points(latitudes, longitudes, new_path + '\heatmap.html')
 
 
-def load_rdd(csv_path, fishing_vessels_csv_path):
-    fishing_vessels = sc.textFile(fishing_vessels_csv_path).filter(lambda l: not l.startswith('maritime_area'))
-
-    fishing_vessels_source = fishing_vessels\
-        .map(lambda x: x.split(";")[5])\
-        .filter(lambda x: x != '')
-
-    initData = sc.textFile(csv_path).filter(lambda l: not l.startswith('sourcemmsi'))
-
-    initSource = initData\
-        .map(lambda x: x.split(","))
-
-    init_source_join = initSource \
-        .map(lambda x: (int(x[0]), (int(x[8]), float(x[6]), float(x[7]))))
-
-    fishing_vessels_source_join = fishing_vessels_source.map(lambda x: (int(x), 'fish'))
-    joined = init_source_join.leftOuterJoin(fishing_vessels_source_join)    
-    filtered_join = joined.filter(lambda x: not x[1][1] is None)
-    return filtered_join.map(lambda x: (int(x[1][0][0]), float(x[1][0][1]), float(x[1][0][2]), int(x[0])))
-
 # places   degrees          distance
 # -------  -------          --------
 # 0        1                111  km
@@ -181,7 +161,7 @@ step_time = 120
 top_k = 15000
 count_data = 0
 result_path = 'file:///C:/Users/filippisc/Desktop/Spark_Data/results'
-csv_file_path = 'file:///C:/Users/filippisc/Desktop/project/data/nari_dynamic.csv'
+csv_file_path = 'file:///C:/Users/filippisc/Desktop/project/data/nari_dynamic_sample.csv'
 fishing_vessels_csv_file_path = 'file:///C:/Users/filippisc/Desktop/project/data/anfr.csv'
 
 # result_path = 'file:///spark/spark-2.2.1-bin-hadoop2.7/results'
@@ -193,75 +173,26 @@ acc_sum_x = sc.accumulator(0)
 acc_sum_x2 = sc.accumulator(0)
 count_data = sc.accumulator(0)
 
-#=62% (935932/1500000)
-# int: time, float: lat, float: lon, int: id
-source = load_rdd(csv_file_path, fishing_vessels_csv_file_path)
 
-# find the min date
-broad_time_min = source\
-     .map(lambda x: x[0]).min()
 
-broadcast_min_time = sc.broadcast(broad_time_min)
+fishing_vessels = sc.textFile(fishing_vessels_csv_file_path).filter(lambda l: not l.startswith('maritime_area'))
 
-# time, lat, lon, xi,  id
-structured_weighted_data = source \
-    .map(lambda x: transform_with_weight(x, broadcast_min_time, step_time)) \
-    .persist(StorageLevel.MEMORY_AND_DISK)
+fishing_vessels_source = fishing_vessels\
+    .map(lambda x: x.split(";")[5])\
+    .filter(lambda x: x != '')
 
-# find the min / max longitude
-lon_min, lon_max = get_min_max(structured_weighted_data, 2)
-lon_range = lon_max - lon_min
+initData = sc.textFile(csv_file_path).filter(lambda l: not l.startswith('sourcemmsi'))
 
-# find the min / max latitude
-lat_min, lat_max = get_min_max(structured_weighted_data, 1)
-lat_range = lat_max - lat_min
+initSource = initData\
+    .map(lambda x: x.split(","))
 
-# find the min / max date
-time_min, time_max = get_min_max(structured_weighted_data, 0)
-time_range = time_max - time_min
+init_source_join = initSource \
+    .map(lambda x: (int(x[0]), (int(x[8]), float(x[6]), float(x[7]))))
 
-n = lat_range * lon_range * time_range
+fishing_vessels_source_join = fishing_vessels_source.map(lambda x: (long(x), 'fish'))
 
-# number of points in 3D cells
-keyValue_data = structured_weighted_data\
-    .map(lambda x: (get_key(x), 1)) \
-    .reduceByKey(lambda x, y: x + y) \
-    .filter(lambda x: x[1] > 1) \
+joined = init_source_join.leftOuterJoin(fishing_vessels_source_join)
 
-# calculate xi foreach cell
-keyValue_weighted_data = structured_weighted_data \
-    .map(lambda x: (get_key(x), x[3])) \
-    .reduceByKey(lambda x, y: x + y) \
+filtered_join = joined.filter(lambda x: not x[1][1] is None)
 
-# calculate the sum of xi and xi^2 using accumulator sum_x and acc_sum_x2
-keyValue_weighted_data.foreach(lambda x: handle_accumulators(x, acc_sum_x, acc_sum_x2))
-
-# find the number of cells using accumulator number_of_cells
-source.foreach(lambda x: acc_number_of_cells.add(1))
-
-source.foreach(lambda x: count_data.add(1))
-
-# get values
-number_of_cells = acc_number_of_cells.value
-sum_x = acc_sum_x.value
-sum_x2 = acc_sum_x2.value
-
-# calculate X
-X = sum_x / n
-
-# calculate S
-S = math.sqrt((sum_x2 / n) - math.pow(X, 2))
-
-keyValue_with_neighbor_weights = keyValue_weighted_data\
-    .flatMap(lambda line: get_direct_neighbor_ids(line[0], time_min, time_max, lon_min, lon_max, lat_min, lat_max, line[1])) \
-    .reduceByKey(lambda x, y: x + y)
-
-# cell, cell_xi, n, large_x, large_s, t_min, t_max, ln_min, ln_max, lt_min, lt_max, cell_xi
-getis_ord_keyValue = keyValue_with_neighbor_weights\
-    .map(lambda line: get_getisord(line[0], line[1], n, X, S, time_min, time_max, lon_min, lon_max, lat_min, lat_max))
-
-getis_dataFrame = sqlContext.createDataFrame(getis_ord_keyValue, ['id', 'gi'])
-
-getis_dataFrame.sort(['gi'], ascending=[0]).limit(int(count_data.value * 0.03)).repartition(1).write.format("com.databricks.spark.csv").option("header", "true").save(result_path)
-create_html_from_csv(result_path)
-sparkSession.stop()
+print_formatted(filtered_join, 50)
