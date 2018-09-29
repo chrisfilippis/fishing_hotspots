@@ -10,8 +10,16 @@ from os import listdir
 import pandas
 import os.path
 
-app_name = "Hot spot app"
-master = "local[*]"
+app_name = "Fishing hot spot app"
+
+def result_path():
+    return 'file:///spark/spark-2.2.1-bin-hadoop2.7/fish/resutls'
+
+def csv_file_path():
+    return 'hdfs:///data/fish/vessels_s.csv'
+    
+def fishing_vessels_csv_file_path():
+    return 'hdfs:///data/fish/fish.csv'
 
 def get_decimal(_text, step_value):
     return int(_text) * step_value
@@ -178,15 +186,11 @@ sqlContext = sparkSession
 step_lat = 0.003
 step_lon = 0.003
 step_time = 120
-top_k = 15000
 count_data = 0
-result_path = 'file:///C:/Users/filippisc/Desktop/Spark_Data/results'
-csv_file_path = 'file:///C:/Users/filippisc/Desktop/project/data/nari_dynamic.csv'
-fishing_vessels_csv_file_path = 'file:///C:/Users/filippisc/Desktop/project/data/anfr.csv'
 
-# result_path = 'file:///spark/spark-2.2.1-bin-hadoop2.7/results'
-# csv_file_path = 'hdfs:///data/test/data_full.csv'
-# csv_file_path = "C:\Spark_Data\million_bigdata.sample"
+result_path = result_path()
+csv_file_path = csv_file_path()
+fishing_vessels_csv_file_path = fishing_vessels_csv_file_path()
 
 acc_number_of_cells = sc.accumulator(0)
 acc_sum_x = sc.accumulator(0)
