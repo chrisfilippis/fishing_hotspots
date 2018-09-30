@@ -13,16 +13,16 @@ import os.path
 app_name = "Fishing hot spot app"
 
 def result_path():
-    # return 'file:///spark/spark-2.2.1-bin-hadoop2.7/fish/resutls'
-    return 'file:///C:/Users/filippisc/Desktop/project/fishing_hotspots/data/result'
+    return 'file:///spark/spark-2.2.1-bin-hadoop2.7/fish/resutls'
+    # return 'file:///C:/Users/filippisc/Desktop/project/fishing_hotspots/data/result'
 
 def csv_file_path():
-    # return 'hdfs:///data/fish/vessels_s.csv'
-    return 'file:///C:/Users/filippisc/Desktop/project/fishing_hotspots/data/vessels_s.csv'
+    return 'hdfs:///data/fish/vessels_s.csv'
+    # return 'file:///C:/Users/filippisc/Desktop/project/fishing_hotspots/data/vessels.csv'
     
 def fishing_vessels_csv_file_path():
-    # return 'hdfs:///data/fish/fish.csv'
-    return 'file:///C:/Users/filippisc/Desktop/project/fishing_hotspots/data/fish.csv'
+    return 'hdfs:///data/fish/fish.csv'
+    # return 'file:///C:/Users/filippisc/Desktop/project/fishing_hotspots/data/fish.csv'
 
 def get_decimal(_text, step_value):
     return int(_text) * step_value
