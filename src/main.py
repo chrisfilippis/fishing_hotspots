@@ -13,13 +13,16 @@ import os.path
 app_name = "Fishing hot spot app"
 
 def result_path():
-    return 'file:///spark/spark-2.2.1-bin-hadoop2.7/fish/resutls'
+    # return 'file:///spark/spark-2.2.1-bin-hadoop2.7/fish/resutls'
+    return 'file:///C:/Users/filippisc/Desktop/project/fishing_hotspots/data/result'
 
 def csv_file_path():
-    return 'hdfs:///data/fish/vessels_s.csv'
+    # return 'hdfs:///data/fish/vessels_s.csv'
+    return 'file:///C:/Users/filippisc/Desktop/project/fishing_hotspots/data/vessels_s.csv'
     
 def fishing_vessels_csv_file_path():
-    return 'hdfs:///data/fish/fish.csv'
+    # return 'hdfs:///data/fish/fish.csv'
+    return 'file:///C:/Users/filippisc/Desktop/project/fishing_hotspots/data/fish.csv'
 
 def get_decimal(_text, step_value):
     return int(_text) * step_value
@@ -168,18 +171,6 @@ def load_rdd(csv_path, fishing_vessels_csv_path):
     filtered_join = joined.filter(lambda x: not x[1][1] is None)
     return filtered_join.map(lambda x: (int(x[1][0][0]), float(x[1][0][1]), float(x[1][0][2]), int(x[0])))
 
-# places   degrees          distance
-# -------  -------          --------
-# 0        1                111  km
-# 1        0.1              11.1 km
-# 2        0.01             1.11 km
-# 3        0.001            111  m
-# 4        0.0001           11.1 m
-# 5        0.00001          1.11 m
-# 6        0.000001         11.1 cm
-# 7        0.0000001        1.11 cm
-# 8        0.00000001       1.11 mm
-
 sparkSession = get_spark_session()
 sc = sparkSession.sparkContext
 sqlContext = sparkSession
@@ -197,7 +188,7 @@ acc_sum_x = sc.accumulator(0)
 acc_sum_x2 = sc.accumulator(0)
 count_data = sc.accumulator(0)
 
-#=62% (935932/1500000)
+#=62%
 # int: time, float: lat, float: lon, int: id
 source = load_rdd(csv_file_path, fishing_vessels_csv_file_path)
 
